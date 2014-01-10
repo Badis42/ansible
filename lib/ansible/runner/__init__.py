@@ -42,6 +42,7 @@ from ansible import errors
 from ansible import module_common
 import poller
 import connection
+import host_vars_proxy
 from return_data import ReturnData
 from ansible.callbacks import DefaultRunnerCallbacks, vv
 from ansible.module_common import ModuleReplacer
@@ -83,23 +84,6 @@ def _executor_hook(job_queue, result_queue, new_stdin):
             pass
         except:
             traceback.print_exc()
-
-class HostVars(dict):
-    ''' A special view of setup_cache that adds values from the inventory when needed. '''
-
-    def __init__(self, setup_cache, inventory):
-        self.setup_cache = setup_cache
-        self.inventory = inventory
-        self.lookup = dict()
-        self.update(setup_cache)
-
-    def __getitem__(self, host):
-        if host not in self.lookup:
-            result = self.inventory.get_variables(host)
-            result.update(self.setup_cache.get(host, {}))
-            self.lookup[host] = result
-        return self.lookup[host]
-
 
 class Runner(object):
     ''' core API interface to ansible '''
@@ -453,7 +437,7 @@ class Runner(object):
         inject = utils.combine_vars(inject, self.module_vars)
         inject = utils.combine_vars(inject, self.setup_cache[host])
         inject.setdefault('ansible_ssh_user', self.remote_user)
-        inject['hostvars'] = HostVars(self.setup_cache, self.inventory)
+        inject['hostvars'] = host_vars_proxy.HostVarsProxy(self.setup_cache, self.inventory)
         inject['group_names'] = host_variables.get('group_names', [])
         inject['groups']      = self.inventory.groups_list()
         inject['vars']        = self.module_vars
