@@ -40,6 +40,9 @@ from ansible.utils import template
 from ansible.utils import check_conditional
 from ansible import errors
 from ansible import module_common
+import template_manager
+import connection_manager 
+import inventory_librarian
 import poller
 import connection
 import host_vars_proxy
@@ -126,6 +129,18 @@ class Runner(object):
         accelerate_port=None,               # port to use with accelerated connection
         ):
 
+
+        ### BEGIN declaring higher-level runner abstractions (REFACTOR WIP)
+
+        self.inventory_librarian = inventory_librarian.InventoryLibrarian()
+        self.template_manager    = template_manager.TemplateManager()
+        self.connection_manager  = connection_manager.ConnectionManager(
+            inventory_librarian, 
+            template_manager  
+        )
+
+        ### END declaring higher-level runner abstractions (REFACTOR WIP)
+
         # used to lock multiprocess inputs and outputs at various levels
         self.output_lockfile  = OUTPUT_LOCKFILE
         self.process_lockfile = PROCESS_LOCKFILE
@@ -146,7 +161,6 @@ class Runner(object):
         self.module_vars      = utils.default(module_vars, lambda: {})
         self.default_vars     = utils.default(default_vars, lambda: {})
         self.always_run       = None
-        self.connector        = connection.Connection(self)
         self.conditional      = conditional
         self.module_name      = module_name
         self.forks            = int(forks)
@@ -422,50 +436,37 @@ class Runner(object):
         ''' executes any module one or more times '''
 
         host_variables = self.inventory.get_variables(host)
-        host_connection = host_variables.get('ansible_connection', self.transport)
-        if host_connection in [ 'paramiko', 'ssh', 'ssh_alt', 'accelerate' ]:
-            port = host_variables.get('ansible_ssh_port', self.remote_port)
-            if port is None:
-                port = C.DEFAULT_REMOTE_PORT
-        else:
-            # fireball, local, etc
-            port = self.remote_port
 
-        inject = {}
-        inject = utils.combine_vars(inject, self.default_vars)
-        inject = utils.combine_vars(inject, host_variables)
-        inject = utils.combine_vars(inject, self.module_vars)
-        inject = utils.combine_vars(inject, self.setup_cache[host])
-        inject.setdefault('ansible_ssh_user', self.remote_user)
-        inject['hostvars'] = host_vars_proxy.HostVarsProxy(self.setup_cache, self.inventory)
-        inject['group_names'] = host_variables.get('group_names', [])
-        inject['groups']      = self.inventory.groups_list()
-        inject['vars']        = self.module_vars
-        inject['defaults']    = self.default_vars
-        inject['environment'] = self.environment
-        inject['playbook_dir'] = self.basedir
-
-        if self.inventory.basedir() is not None:
-            inject['inventory_dir'] = self.inventory.basedir()
-
-        if self.inventory.src() is not None:
-            inject['inventory_file'] = self.inventory.src()
+        context = self.inventory_librarian.context()
+        context.set_default_variables(self)
+        context.set_host_variables(host_variables)
+        context.set_module_variables(self)
+        context.set_remote_user(self)
+        context.set_host_vars_proxy(host_vars_proxy.HostVarsProxy(self.setup_cache, self.inventory))
+        context.set_groups(self.inventory)
+        context.set_group_names(self.inventory)
+        context.set_module_variables(self)
+        context.set_default_variables(self)
+        context.set_environment(self)
+        context.set_playbook_dir(self)
+        context.set_inventory_dir(self.inventory)
+        context.set_inventory_file(self.inventory)
 
         # allow with_foo to work in playbooks...
         items = None
-        items_plugin = self.module_vars.get('items_lookup_plugin', None)
+        items_plugin = context.get('items_lookup_plugin', None)
 
         if items_plugin is not None and items_plugin in utils.plugins.lookup_loader:
 
             basedir = self.basedir
             if '_original_file' in inject:
-                basedir = os.path.dirname(inject['_original_file'])
+                basedir = os.path.dirname(context.get('_original_file'))
                 filesdir = os.path.join(basedir, '..', 'files')
                 if os.path.exists(filesdir):
                     basedir = filesdir
 
-            items_terms = self.module_vars.get('items_lookup_terms', '')
-            items_terms = template.template(basedir, items_terms, inject)
+            items_terms = context.get('items_lookup_terms', '')
+            items_terms = template.template(basedir, items_terms, inject) # FIXME: use Template Manager
             items = utils.plugins.lookup_loader.get(items_plugin, runner=self, basedir=basedir).run(items_terms, inject=inject)
             if type(items) != list:
                 raise errors.AnsibleError("lookup plugins have to return a list: %r" % items)
@@ -474,10 +475,10 @@ class Runner(object):
                 # hack for apt, yum, and pkgng so that with_items maps back into a single module call
                 use_these_items = []
                 for x in items:
-                    inject['item'] = x
-                    if not self.conditional or utils.check_conditional(self.conditional, self.basedir, inject, fail_on_undefined=self.error_on_undefined_vars):
+                    context.set_loop_item(x)
+                    if not self.conditional or utils.check_conditional(self.conditional, self.basedir, context.calculate(), fail_on_undefined=self.error_on_undefined_vars):
                         use_these_items.append(x)
-                inject['item'] = ",".join(use_these_items)
+                context.set_item(",".join(use_these_items))
                 items = None
 
         # logic to replace complex args if possible
@@ -490,7 +491,7 @@ class Runner(object):
                 complex_args = utils.safe_eval(complex_args)
                 if type(complex_args) != dict:
                     raise errors.AnsibleError("args must be a dictionary, received %s" % complex_args)
-            return self._executor_internal_inner(host, self.module_name, self.module_args, inject, port, complex_args=complex_args)
+            return self._executor_internal_inner(host, self.module_name, self.module_args, context, complex_args=complex_args)
         elif len(items) > 0:
 
             # executing using with_items, so make multiple calls
@@ -509,7 +510,7 @@ class Runner(object):
 
                 # TODO: this idiom should be replaced with an up-conversion to a Jinja2 template evaluation
                 if isinstance(self.complex_args, basestring):
-                    complex_args = template.template(self.basedir, self.complex_args, inject, convert_bare=True)
+                    complex_args = template.template(self.basedir, self.complex_args, context.calculate(), convert_bare=True)
                     complex_args = utils.safe_eval(complex_args)
                     if type(complex_args) != dict:
                         raise errors.AnsibleError("args must be a dictionary, received %s" % complex_args)
@@ -517,8 +518,7 @@ class Runner(object):
                      host,
                      self.module_name,
                      self.module_args,
-                     inject,
-                     port,
+                     context,
                      complex_args=complex_args
                 )
                 results.append(result.result)
@@ -545,12 +545,15 @@ class Runner(object):
 
     # *****************************************************
 
-    def _executor_internal_inner(self, host, module_name, module_args, inject, port, is_chained=False, complex_args=None):
+    def _executor_internal_inner(self, host, module_name, module_args, context, is_chained=False, complex_args=None):
         ''' decides how to invoke a module '''
+
+        # this should really be passed in as an object at this point
+        host = self.inventory.get_host(host)
 
         # late processing of parameterized sudo_user (with_items,..)
         if self.sudo_user_var is not None:
-            self.sudo_user = template.template(self.basedir, self.sudo_user_var, inject)
+            self.sudo_user = template.template(self.basedir, self.sudo_user_var, context.calculate())
 
         # allow module args to work as a dictionary
         # though it is usually a string
@@ -561,7 +564,7 @@ class Runner(object):
             module_args = new_args
 
         # module_name may be dynamic (but cannot contain {{ ansible_ssh_user }})
-        module_name  = template.template(self.basedir, module_name, inject)
+        module_name  = template.template(self.basedir, module_name, context.calculate())
 
         if module_name in utils.plugins.action_loader:
             if self.background != 0:
@@ -577,102 +580,107 @@ class Runner(object):
 
         for cond in self.conditional:
 
-            if not utils.check_conditional(cond, self.basedir, inject, fail_on_undefined=self.error_on_undefined_vars):
+            if not utils.check_conditional(cond, self.basedir, context.calculate(), fail_on_undefined=self.error_on_undefined_vars):
                 result = utils.jsonify(dict(changed=False, skipped=True))
-                self.callbacks.on_skipped(host, inject.get('item',None))
+                self.callbacks.on_skipped(host, context.get_loop_item())
                 return ReturnData(host=host, result=result)
 
         if getattr(handler, 'setup', None) is not None:
             handler.setup(module_name, inject)
         conn = None
-        actual_host = inject.get('ansible_ssh_host', host)
+
+        # REFACTORED into ConnectionManager -- DELETION PENDING
+        #actual_host = inject.get('ansible_ssh_host', host)
         # allow ansible_ssh_host to be templated
-        actual_host = template.template(self.basedir, actual_host, inject, fail_on_undefined=True)
-        actual_port = port
-        actual_user = inject.get('ansible_ssh_user', self.remote_user)
-        actual_pass = inject.get('ansible_ssh_pass', self.remote_pass)
-        actual_transport = inject.get('ansible_connection', self.transport)
-        actual_private_key_file = inject.get('ansible_ssh_private_key_file', self.private_key_file)
-        self.sudo_pass = inject.get('ansible_sudo_pass', self.sudo_pass)
+        #actual_host = template.template(self.basedir, actual_host, inject, fail_on_undefined=True)
+        #actual_port = port
+        #actual_user = inject.get('ansible_ssh_user', self.remote_user)
+        #actual_pass = inject.get('ansible_ssh_pass', self.remote_pass)
+        #actual_transport = inject.get('ansible_connection', self.transport)
+        #actual_private_key_file = inject.get('ansible_ssh_private_key_file', self.private_key_file)
+        #self.sudo_pass = context.get('inject.get('ansible_sudo_pass', self.sudo_pass)
 
-        if actual_private_key_file is not None:
-            actual_private_key_file = os.path.expanduser(actual_private_key_file)
+        #if actual_private_key_file is not None:
+        #    actual_private_key_file = os.path.expanduser(actual_private_key_file)
 
-        if self.accelerate and actual_transport != 'local':
-            #Fix to get the inventory name of the host to accelerate plugin
-            if inject.get('ansible_ssh_host', None):
-                self.accelerate_inventory_host = host
-            else:
-                self.accelerate_inventory_host = None
-            # if we're using accelerated mode, force the
-            # transport to accelerate
-            actual_transport = "accelerate"
-            if not self.accelerate_port:
-                self.accelerate_port = C.ACCELERATE_PORT
+        # REFACTORING WILL NEED TO DEAL WITH THIS
+        #if self.accelerate and actual_transport != 'local':
+        #    #Fix to get the inventory name of the host to accelerate plugin
+        #    if inject.get('ansible_ssh_host', None):
+        #        self.accelerate_inventory_host = host
+        #    else:
+        #        self.accelerate_inventory_host = None
+        #    # if we're using accelerated mode, force the
+        #    # transport to accelerate
+        #    actual_transport = "accelerate"
+        #    if not self.accelerate_port:
+        #        self.accelerate_port = C.ACCELERATE_PORT
 
-        if actual_transport in [ 'paramiko', 'ssh', 'ssh_alt', 'accelerate' ]:
-            actual_port = inject.get('ansible_ssh_port', port)
+        #if actual_transport in [ 'paramiko', 'ssh', 'ssh_alt', 'accelerate' ]:
+        #    actual_port = inject.get('ansible_ssh_port', port)
 
         # the delegated host may have different SSH port configured, etc
         # and we need to transfer those, and only those, variables
-        delegate_to = inject.get('delegate_to', None)
-        if delegate_to is not None:
-            delegate_to = template.template(self.basedir, delegate_to, inject)
-            inject = inject.copy()
-            interpreters = []
-            for i in inject:
-                if i.startswith("ansible_") and i.endswith("_interpreter"):
-                    interpreters.append(i)
-            for i in interpreters:
-                del inject[i]
-            port = C.DEFAULT_REMOTE_PORT
-            try:
-                delegate_info = inject['hostvars'][delegate_to]
-                actual_host = delegate_info.get('ansible_ssh_host', delegate_to)
-                # allow ansible_ssh_host to be templated
-                actual_host = template.template(self.basedir, actual_host, inject, fail_on_undefined=True)
-                actual_port = delegate_info.get('ansible_ssh_port', port)
-                actual_user = delegate_info.get('ansible_ssh_user', actual_user)
-                actual_pass = delegate_info.get('ansible_ssh_pass', actual_pass)
-                actual_private_key_file = delegate_info.get('ansible_ssh_private_key_file', self.private_key_file)
-                actual_transport = delegate_info.get('ansible_connection', self.transport)
-                self.sudo_pass = delegate_info.get('ansible_sudo_pass', self.sudo_pass)
+        # delegate_to = inject.get('delegate_to', None)
 
-                if actual_private_key_file is not None:
-                    actual_private_key_file = os.path.expanduser(actual_private_key_file)
+        # this is going to need to come out of all the context magic eventually (FIXME)
 
-                for i in delegate_info:
-                    if i.startswith("ansible_") and i.endswith("_interpreter"):
-                        inject[i] = delegate_info[i]
-            except errors.AnsibleError:
-                actual_host = delegate_to
-                actual_port = port
+        delegate_host = self.connection_manager.get_delegate_host(context)
 
+        # if delegate_host:
+        #
+        #    delegate_to = template.template(self.basedir, delegate_to, inject)
+        #    inject = inject.copy()
+        #    interpreters = []
+        #    for i in inject:
+        #        if i.startswith("ansible_") and i.endswith("_interpreter"):
+        #            interpreters.append(i)
+        #    for i in interpreters:
+        #        del inject[i]
+        #    port = C.DEFAULT_REMOTE_PORT
+        #    try:
+        #       delegate_info = inject['hostvars'][delegate_to]
+        #        # DELETION PENDING
+        #        #actual_host = delegate_info.get('ansible_ssh_host', delegate_to)
+        #        # allow ansible_ssh_host to be templated
+        #        #actual_host = template.template(self.basedir, actual_host, inject, fail_on_undefined=True)
+        #        #actual_port = delegate_info.get('ansible_ssh_port', port)
+        #        #actual_user = delegate_info.get('ansible_ssh_user', actual_user)
+        #        #actual_pass = delegate_info.get('ansible_ssh_pass', actual_pass)
+        #        #actual_private_key_file = delegate_info.get('ansible_ssh_private_key_file', self.private_key_file)
+        #        #actual_transport = delegate_info.get('ansible_connection', self.transport)
+        #        #self.sudo_pass = delegate_info.get('ansible_sudo_pass', self.sudo_pass)
+        #
+        #        #if actual_private_key_file is not None:
+        #        #    actual_private_key_file = os.path.expanduser(actual_private_key_file)
+        #
+        #               for i in delegate_info:
+        #            if i.startswith("ansible_") and i.endswith("_interpreter"):
+        #                inject[i] = delegate_info[i]
+        #    except errors.AnsibleError:
+        #        actual_host = delegate_to
+        #        actual_port = port
+
+        # FIXME: REFACTORING WILL NEED TO DEAL WITH THIS
         # user/pass may still contain variables at this stage
-        actual_user = template.template(self.basedir, actual_user, inject)
-        actual_pass = template.template(self.basedir, actual_pass, inject)
-
+        #actual_user = template.template(self.basedir, actual_user, inject)
+        #actual_pass = template.template(self.basedir, actual_pass, inject)
         # make actual_user available as __magic__ ansible_ssh_user variable
-        inject['ansible_ssh_user'] = actual_user
+        # inject['ansible_ssh_user'] = actual_user
+        #try:
+        #    if actual_transport == 'accelerate':
+        #        # for accelerate, we stuff both ports into a single
+       # #        # variable so that we don't have to mangle other function
+        #        # calls just to accomodate this one case
+        #        actual_port = [actual_port, self.accelerate_port]
+        #    elif actual_port is not None:
+        #        actual_port = int(template.template(self.basedir, actual_port, inject))
+        #except ValueError, e:
+        #    result = dict(failed=True, msg="FAILED: Configured port \"%s\" is not a valid port, expected integer" % actual_port)
+        #    return ReturnData(host=host, comm_ok=False, result=result)
 
         try:
-            if actual_transport == 'accelerate':
-                # for accelerate, we stuff both ports into a single
-                # variable so that we don't have to mangle other function
-                # calls just to accomodate this one case
-                actual_port = [actual_port, self.accelerate_port]
-            elif actual_port is not None:
-                actual_port = int(template.template(self.basedir, actual_port, inject))
-        except ValueError, e:
-            result = dict(failed=True, msg="FAILED: Configured port \"%s\" is not a valid port, expected integer" % actual_port)
-            return ReturnData(host=host, comm_ok=False, result=result)
-
-        try:
-            conn = self.connector.connect(actual_host, actual_port, actual_user, actual_pass, actual_transport, actual_private_key_file)
-            if delegate_to or host != actual_host:
-                conn.delegate = host
-
-
+            conn = self.connection_manager.get_connection(self, host, context)
         except errors.AnsibleConnectionFailed, e:
             result = dict(failed=True, msg="FAILED: %s" % str(e))
             return ReturnData(host=host, comm_ok=False, result=result)

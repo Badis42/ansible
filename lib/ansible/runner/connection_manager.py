@@ -15,10 +15,114 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-class ConnectionManager(object)
-    ''' A special view of setup_cache that adds values from the inventory when needed. '''
+from ansible import inventory
+import connection 
 
-    def __init__(self):
+# refactoring notes:
+# -- FIXME -- this still needs a lot more logic to deal with the "actual_" logic in the original runner
+#             this is just a stub to get us started.
+
+class ConnectionManager(object):
+
+    ''' 
+    The connection manager decides what out connection the user would like to use out of what's possible
+    and then instantiates the connection.
+    '''
+
+
+    def __init__(self, inventory_librarian, template_manager):
+
+        self.inventory_librarian = inventory_librarian
+        self.template_manager    = template_manager
+
         pass
 
+    # ------------------------------------------------------------------
+   
+    def _fetch_librarian_value(self, host, field):
+        ''' lookup the value of a variable from a host or the delegate host '''
 
+        assert type(host) is inventory.Host
+        print field
+        assert isinstance(field, basestring)
+
+        delegate_host = self.determine_delegate_host(host_object)
+
+        if delegate_host:
+            return self.inventory_librarian.get(delegate_host, 'ansible_ssh_host')
+        else:
+            return self.inventory_librarian.get(host, 'ansible_ssh_host')
+
+    # ------------------------------------------------------------------
+
+    def _fetch_and_template(self, host, field):
+        ''' lookup a value from the librarian and then template the result using the host variables '''
+
+        assert type(host) is inventory.Host
+        assert isinstance(field, basestring)
+
+        return self.template_manager.template(
+            self._fetch_library_value(host, field, default),
+            host
+        )
+
+    # ------------------------------------------------------------------
+
+    def get_actual_host(self, host):
+        return self._fetch_and_template(host, 'ansible_ssh_host')
+
+    # ------------------------------------------------------------------
+          
+    def get_actual_port(self, host):
+        return self._fetch_and_template(host, 'ansible_ssh_host')
+
+    # ------------------------------------------------------------------
+
+    def get_actual_pass(self, host):
+        return self._fetch_and_template(host, 'ansible_ssh_pass')
+
+    # ------------------------------------------------------------------
+
+    def get_actual_transport(self, host):
+        return self._fetch_and_template(host, 'ansible_ssh_connection')
+
+    # ------------------------------------------------------------------
+
+    def get_actual_private_key_file(self, host):
+        return self._fetch_and_template(host, 'ansible_ssh_private_key_file')
+
+    # ------------------------------------------------------------------
+
+    def get_delegate_host(self, librarian_context):
+        hostname = librarian_context.get('delegate_to')
+        if hostname is not None:
+            hostname = self.template_manager.template((hostname), host) # probably needs to take the context
+            return self.inventory.get_host(hostname)
+        return None
+ 
+    # ------------------------------------------------------------------
+
+
+    def get_connection(self, runner, host_object, context):
+
+        base = connection.Connection(runner)
+
+        delegate_host = self.get_delegate_host(context)
+
+        conn = base.connect(
+            self.get_actual_host(host_object),
+            self.get_actual_port(host_object),
+            self.get_actual_user(host_object),
+            self.get_actual_pass(host_object),
+            self.get_actual_transport(host_object),
+            self.get_actual_private_key_file(host_object),           
+        )
+        
+        if delegate_host:
+            conn.delegate = delegate_host
+
+        return conn
+
+    
+
+    
