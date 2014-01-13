@@ -28,16 +28,20 @@ class InventoryLibrarian(object):
     parameters that will decide how we connect (see ConnectionManager).
     '''
 
-    def __init__(self):
-        pass
+    def __init__(self, runner, template_manager):
+        self._runner = runner
+        self._template_manager = template_manager
 
     def context(self):
-        return InventoryContext()
+        return InventoryContext(self._runner, self._template_manager)
 
 
 class InventoryContext(object):
     
-    def __init__(self):
+    def __init__(self, runner, template_manager):
+        
+        self._runner = runner
+        self._template_manager = template_manager
 
         self._changed = True
         self._default_variables = {}
@@ -121,6 +125,40 @@ class InventoryContext(object):
     def get_loop_item(self):
         self._changed = True
         return self._item
+
+    def _fetch_and_template(self, field, *args):
+        ''' lookup a value from the librarian and then template the result using the host variables '''
+
+        assert isinstance(field, basestring)
+        return self.template_manager.template(
+            self.get(field, *args)
+            self
+        )
+
+    def get_delegate_host(self, context):
+        hostname = context.get('delegate_to')
+        if hostname is not None:
+            hostname = self.template_manager.template(hostname, context)
+            return self.inventory.get_host(hostname)
+        return None
+
+    def get_actual_host(self, host, context):
+        return self._fetch_and_template('ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
+
+    def get_actual_user(self, host, context):
+        return self._fetch_and_template('ansible_ssh_user', 'FIXME DEFAULT GOES HERE')
+
+    def get_actual_port(self, host, context):
+        return self._fetch_and_template('ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
+
+    def get_actual_pass(self, host, context):
+        return self._fetch_and_template('ansible_ssh_pass', 'FIXME DEFAULT GOES HERE')
+
+    def get_actual_transport(self, host, context):
+        return self._fetch_and_template('ansible_ssh_connection', 'FIXME DEFAULT GOES HERE')
+
+    def get_actual_private_key_file(self, host, context):
+        return self._fetch_and_template('ansible_ssh_private_key_file', 'FIXME DEFAULT GOES HERE')
 
     def calculate(self):
         ''' build the internal variable dictionary '''

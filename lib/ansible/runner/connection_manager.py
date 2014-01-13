@@ -38,67 +38,6 @@ class ConnectionManager(object):
         pass
 
     # ------------------------------------------------------------------
-   
-    def _fetch_librarian_value(self, host, context, field, *args):
-        ''' lookup the value of a variable from a host or the delegate host '''
-
-        assert type(host) is inventory.Host
-        assert isinstance(field, basestring)
-        return context.get(field, *args)
-
-    # ------------------------------------------------------------------
-
-    def _fetch_and_template(self, host, context, field, *args):
-        ''' lookup a value from the librarian and then template the result using the host variables '''
-
-        assert type(host) is inventory.Host
-        assert isinstance(field, basestring)
-
-        return self.template_manager.template(
-            self._fetch_librarian_value(host, context, field, *args),
-            context
-        )
-
-    # ------------------------------------------------------------------
-
-    def get_actual_host(self, host, context):
-        return self._fetch_and_template(host, context, 'ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-
-    def get_actual_user(self, host, context):
-        return self._fetch_and_template(host, context, 'ansible_ssh_user', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-          
-    def get_actual_port(self, host, context):
-        return self._fetch_and_template(host, context, 'ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-
-    def get_actual_pass(self, host, context):
-        return self._fetch_and_template(host, context, 'ansible_ssh_pass', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-
-    def get_actual_transport(self, host, context): 
-        return self._fetch_and_template(host, context, 'ansible_ssh_connection', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-
-    def get_actual_private_key_file(self, host, context):
-        return self._fetch_and_template(host, context, 'ansible_ssh_private_key_file', 'FIXME DEFAULT GOES HERE')
-
-    # ------------------------------------------------------------------
-
-    def get_delegate_host(self, context):
-        hostname = context.get('delegate_to')
-        if hostname is not None:
-            hostname = self.template_manager.template(hostname, context) 
-            return self.inventory.get_host(hostname)
-        return None
- 
-    # ------------------------------------------------------------------
 
 
     def get_connection(self, runner, host, context):

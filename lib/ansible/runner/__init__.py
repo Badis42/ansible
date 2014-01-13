@@ -133,7 +133,7 @@ class Runner(object):
         ### BEGIN declaring higher-level runner abstractions (REFACTOR WIP)
 
         self.basedir             = utils.default(basedir, lambda: os.getcwd())
-        self.inventory_librarian = inventory_librarian.InventoryLibrarian()
+        self.inventory_librarian = inventory_librarian.InventoryLibrarian(self)
         self.template_manager    = template_manager.TemplateManager(self.basedir)
         self.connection_manager  = connection_manager.ConnectionManager(
             self.inventory_librarian, 
