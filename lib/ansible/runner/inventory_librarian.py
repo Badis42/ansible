@@ -149,6 +149,7 @@ class InventoryContext(object):
 
 
     def get(self, key, *args):
+        assert isinstance(key, basestring)
 
         ''' Look up the basic value of a variable from inventory (mixing in playbook variables and so on)'''
         if self._changed:
