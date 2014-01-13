@@ -142,6 +142,8 @@ class InventoryContext(object):
         inject['playbook_dir'] = self._playbook_dir
         inject['item']         = self._item
 
+        print "INJECT=%s" % inject
+
         self._inject = inject
         return inject
 

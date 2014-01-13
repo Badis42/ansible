@@ -132,11 +132,12 @@ class Runner(object):
 
         ### BEGIN declaring higher-level runner abstractions (REFACTOR WIP)
 
+        self.basedir             = utils.default(basedir, lambda: os.getcwd())
         self.inventory_librarian = inventory_librarian.InventoryLibrarian()
-        self.template_manager    = template_manager.TemplateManager()
+        self.template_manager    = template_manager.TemplateManager(self.basedir)
         self.connection_manager  = connection_manager.ConnectionManager(
-            inventory_librarian, 
-            template_manager  
+            self.inventory_librarian, 
+            self.template_manager  
         )
 
         ### END declaring higher-level runner abstractions (REFACTOR WIP)
@@ -152,7 +153,6 @@ class Runner(object):
         self.check            = check
         self.diff             = diff
         self.setup_cache      = utils.default(setup_cache, lambda: collections.defaultdict(dict))
-        self.basedir          = utils.default(basedir, lambda: os.getcwd())
         self.callbacks        = utils.default(callbacks, lambda: DefaultRunnerCallbacks())
         self.generated_jid    = str(random.randint(0, 999999999999))
         self.transport        = transport
