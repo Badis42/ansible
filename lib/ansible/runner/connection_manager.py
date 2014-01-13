@@ -44,7 +44,7 @@ class ConnectionManager(object):
 
         assert type(host) is inventory.Host
         assert isinstance(field, basestring)
-        return context.get(field, args)
+        return context.get(field, *args)
 
     # ------------------------------------------------------------------
 

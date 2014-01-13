@@ -33,6 +33,7 @@ class Connection(object):
 
     def connect(self, host, port, user, password, transport, private_key_file):
         conn = None
+        print "LOOKING UP: %s" % transport
         conn = utils.plugins.connection_loader.get(transport, self.runner, host, port, user=user, password=password, private_key_file=private_key_file)
         if conn is None:
             raise AnsibleError("unsupported connection type: %s" % transport)
