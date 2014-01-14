@@ -58,10 +58,6 @@ class InventoryContext(object):
         self._inventory_file = ""
         self._item = None
 
-    def set_default_variables(self, value):
-        self._changed = True
-        self._default_variables = value
-
     def set_host_variables(self, value):
         self._changed = True
         self._host_variables = value
@@ -112,7 +108,7 @@ class InventoryContext(object):
 
     def set_inventory_dir(self, inventory):
         self._changed = True
-        self._inventory = inventory.basedir()
+        self._inventory_dir = inventory.basedir()
 
     def set_inventory_file(self, inventory):
         self._changed = True
