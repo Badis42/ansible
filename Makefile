@@ -62,7 +62,7 @@ NOSETESTS := nosetests
 all: clean python
 
 tests:
-	PYTHONPATH=./lib ANSIBLE_LIBRARY=./library  $(NOSETESTS) -d -v
+	PYTHONPATH=./lib ANSIBLE_LIBRARY=./library  $(NOSETESTS) test/*.py -d -v
 
 authors:
 	sh hacking/authors.sh
@@ -103,8 +103,6 @@ clean:
 	find ./docs/man -type f -name "*.xml" -delete
 	find ./docs/man -type f -name "*.asciidoc" -delete
 	find ./docs/man/man3 -type f -name "*.3" -delete
-	@echo "Cleaning up output from test runs"
-	rm -rf test/test_data
 	@echo "Cleaning up RPM building stuff"
 	rm -rf MANIFEST rpm-build
 	@echo "Cleaning up Debian building stuff"
