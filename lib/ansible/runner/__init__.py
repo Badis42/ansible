@@ -133,12 +133,8 @@ class Runner(object):
         ### BEGIN declaring higher-level runner abstractions (REFACTOR WIP)
 
         self.basedir             = utils.default(basedir, lambda: os.getcwd())
-        self.inventory_librarian = inventory_librarian.InventoryLibrarian(self)
         self.template_manager    = template_manager.TemplateManager(self.basedir)
-        self.connection_manager  = connection_manager.ConnectionManager(
-            self.inventory_librarian, 
-            self.template_manager  
-        )
+        self.inventory_librarian = inventory_librarian.InventoryLibrarian(self, self.template_manager)
 
         ### END declaring higher-level runner abstractions (REFACTOR WIP)
 
@@ -625,7 +621,7 @@ class Runner(object):
 
         # this is going to need to come out of all the context magic eventually (FIXME)
 
-        delegate_host = self.connection_manager.get_delegate_host(context)
+        delegate_host = context.get_delegate_host()
 
         # if delegate_host:
         #
@@ -680,7 +676,7 @@ class Runner(object):
         #    return ReturnData(host=host, comm_ok=False, result=result)
 
         try:
-            conn = self.connection_manager.get_connection(self, host, context)
+            conn = self.connection_manager.get_connection(self, context)
         except errors.AnsibleConnectionFailed, e:
             result = dict(failed=True, msg="FAILED: %s" % str(e))
             return ReturnData(host=host, comm_ok=False, result=result)

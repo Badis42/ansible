@@ -131,7 +131,7 @@ class InventoryContext(object):
 
         assert isinstance(field, basestring)
         return self.template_manager.template(
-            self.get(field, *args)
+            self.get(field, *args),
             self
         )
 

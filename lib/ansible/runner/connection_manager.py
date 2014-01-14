@@ -18,43 +18,34 @@
 from ansible import inventory
 import connection 
 
-# refactoring notes:
-# -- FIXME -- this still needs a lot more logic to deal with the "actual_" logic in the original runner
-#             this is just a stub to get us started.
-
 class ConnectionManager(object):
 
     ''' 
-    The connection manager decides what out connection the user would like to use out of what's possible
-    and then instantiates the connection.
+    The connection manager is responsible for instantiating the connection object.
     '''
 
 
-    def __init__(self, inventory_librarian, template_manager):
-
-        self.inventory_librarian = inventory_librarian
-        self.template_manager    = template_manager
-
-        pass
+    def __init__(self, inventory_librarian):
+        self.inv = inventory_librarian
 
     # ------------------------------------------------------------------
 
 
-    def get_connection(self, runner, host, context):
+    def get_connection(self, runner, context):
 
         assert type(host) is inventory.Host
        
         base = connection.Connection(runner)
 
-        delegate_host = self.get_delegate_host(context)
+        delegate_host = self.inv.get_delegate_host(context)
 
         conn = base.connect(
-            self.get_actual_host(host, context),
-            self.get_actual_port(host, context),
-            self.get_actual_user(host, context),
-            self.get_actual_pass(host, context),
-            self.get_actual_transport(host, context),
-            self.get_actual_private_key_file(host, context),           
+            self.inv.get_actual_host(context),
+            self.inv.get_actual_port(context),
+            self.inv.get_actual_user(context),
+            self.inv.get_actual_pass(context),
+            self.inv.get_actual_transport(context),
+            self.inv.get_actual_private_key_file(context),           
         )
         
         if delegate_host:
