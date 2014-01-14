@@ -119,7 +119,29 @@ class TestInventoryLibrarian(unittest.TestCase):
     def test_basic_variable_blending(self):
         self.basic_prep()
         results = self.context.calculate()
-        print results
-        assert False
+
+        assert results['a'] == 4
+        assert results['environment'] == ENVIRONMENT
+        assert results['from_default_vars'] == 1
+        assert results['expect_module_vars_to_clobber'] ==1
+        assert results['d'] == 7
+
+        assert isinstance(results['hostvars'], MockHostVarsProxy)
+        assert results['from_host_vars'] == 1
+        assert results['expect_host_vars_to_clobber'] == 1
+        assert results['expect_host_vars_to_clobber'] == 1
+
+        print results['group_names']
+        assert results['group_names'] == GROUPS_LIST
+        assert 'defaults' in results
+        assert 'vars' in results
+        assert playbook_dir == BASEDIR
+        assert results['ansible_ssh_user'] == REMOTE_USER
+
+        # TODO: not in this file, but we want some real tests for inventory precedence.
+        # this does not need to contain that.
+
+
+
 
  
