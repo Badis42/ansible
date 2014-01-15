@@ -146,29 +146,29 @@ class InventoryContext(object):
             self
         )
 
-    def get_delegate_host(self, context):
-        hostname = context.get('delegate_to')
+    def get_delegate_host(self):
+        hostname = self.get('delegate_to')
         if hostname is not None:
-            hostname = self.template_manager.template(hostname, context)
+            hostname = self.template_manager.template(hostname, self)
             return self.inventory.get_host(hostname)
         return None
 
-    def get_actual_host(self, host, context):
+    def get_actual_host(self):
         return self._fetch_and_template('ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
 
-    def get_actual_user(self, host, context):
+    def get_actual_user(self):
         return self._fetch_and_template('ansible_ssh_user', 'FIXME DEFAULT GOES HERE')
 
-    def get_actual_port(self, host, context):
+    def get_actual_port(self):
         return self._fetch_and_template('ansible_ssh_host', 'FIXME DEFAULT GOES HERE')
 
-    def get_actual_pass(self, host, context):
+    def get_actual_pass(self):
         return self._fetch_and_template('ansible_ssh_pass', 'FIXME DEFAULT GOES HERE')
 
-    def get_actual_transport(self, host, context):
+    def get_actual_transport(self):
         return self._fetch_and_template('ansible_ssh_connection', 'FIXME DEFAULT GOES HERE')
 
-    def get_actual_private_key_file(self, host, context):
+    def get_actual_private_key_file(self):
         return self._fetch_and_template('ansible_ssh_private_key_file', 'FIXME DEFAULT GOES HERE')
 
     def calculate(self):

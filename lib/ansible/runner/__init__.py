@@ -135,6 +135,7 @@ class Runner(object):
         self.basedir             = utils.default(basedir, lambda: os.getcwd())
         self.template_manager    = template_manager.TemplateManager(self.basedir)
         self.inventory_librarian = inventory_librarian.InventoryLibrarian(self, self.template_manager)
+        self.connection_manager  = connection_manager.ConnectionManager(self)
 
         ### END declaring higher-level runner abstractions (REFACTOR WIP)
 
@@ -434,19 +435,19 @@ class Runner(object):
         host_variables = self.inventory.get_variables(host)
 
         context = self.inventory_librarian.context()
-        context.set_default_variables(self)
+        #context.set_default_variables(self)
         context.set_host_variables(host_variables)
-        context.set_module_variables(self)
-        context.set_remote_user(self)
+        #context.set_remote_user(self)
         context.set_host_vars_proxy(host_vars_proxy.HostVarsProxy(self.setup_cache, self.inventory))
-        context.set_groups(self.inventory)
-        context.set_group_names(self.inventory)
-        context.set_module_variables(self)
-        context.set_default_variables(self)
-        context.set_environment(self)
-        context.set_playbook_dir(self)
-        context.set_inventory_dir(self.inventory)
-        context.set_inventory_file(self.inventory)
+        #context.set_groups(self.inventory)
+        #context.set_group_names(self.inventory)
+        context.set_inventory(self.inventory)
+        #context.set_module_variables(self)
+        #context.set_default_variables(self)
+        #context.set_environment(self)
+        #context.set_playbook_dir(self)
+        #context.set_inventory_dir(self.inventory)
+        #context.set_inventory_file(self.inventory)
 
         # allow with_foo to work in playbooks...
         items = None

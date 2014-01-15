@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 
-from ansible import inventory
 import connection 
 
 class ConnectionManager(object):
@@ -33,19 +32,17 @@ class ConnectionManager(object):
 
     def get_connection(self, runner, context):
 
-        assert type(host) is inventory.Host
-       
         base = connection.Connection(runner)
 
-        delegate_host = self.inv.get_delegate_host(context)
+        delegate_host = context.get_delegate_host()
 
         conn = base.connect(
-            self.inv.get_actual_host(context),
-            self.inv.get_actual_port(context),
-            self.inv.get_actual_user(context),
-            self.inv.get_actual_pass(context),
-            self.inv.get_actual_transport(context),
-            self.inv.get_actual_private_key_file(context),           
+            context.get_actual_host(),
+            context.get_actual_port(),
+            context.get_actual_user(),
+            context.get_actual_pass(),
+            context.get_actual_transport(),
+            context.get_actual_private_key_file(),           
         )
         
         if delegate_host:
