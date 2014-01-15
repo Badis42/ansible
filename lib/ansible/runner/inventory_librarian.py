@@ -43,7 +43,10 @@ class InventoryContext(object):
         self._runner = runner
         self._template_manager = template_manager
 
+        # a flag to keep track of whether we need to regenerate _inject on access
         self._changed = True
+
+        # all the properties we want to keep track of
         self._default_variables = {}
         self._host_variables = {}
         self._module_variables = {}
@@ -58,9 +61,20 @@ class InventoryContext(object):
         self._inventory_file = ""
         self._item = None
 
+        # a stored version of all the variables blended together, mainly used for templating purposes
+        self._inject = {}
+
+        self._set_remote_user(runner)
+        self._set_module_variables(runner)
+        self._set_default_variables(runner)
+        self._set_environment(runner)
+        self._set_playbook_dir(runner)
+
     def set_host_variables(self, value):
         self._changed = True
         self._host_variables = value
+        # FIXME: is this available at this time?
+        self._group_names = self._host_variables.get('group_names', [])
     
     def set_module_variables(self, value):
         self._changed = True
@@ -70,39 +84,40 @@ class InventoryContext(object):
         self._changed = True
         self._facts_for_host = value
 
-    def set_remote_user(self, value):
-        self._changed = True
-        self._remote_user = value
+    # not needed?
+    #def set_remote_user(self, value):
+    #    self._changed = True
+    #    self._remote_user = value
 
     def set_host_vars_proxy(self, value):
         self._changed = True
         self._host_vars_proxy = value
 
-    def set_group_names(self, inventory):
-        self._changed = True
-        self._group_names = self._host_variables.get('group_names', [])
-
-    def set_groups(self, inventory):
+    def _set_groups(self, inventory):
         self._changed = True
         self._groups_list = inventory.groups_list()
 
-    def set_remote_user(self, runner):
+    def set_inventory(self, inventory):
+        self._changed = True
+        self._set_groups(inventory)
+
+    def _set_remote_user(self, runner):
         self._changed = True
         self._remote_user = runner.remote_user
 
-    def set_module_variables(self, runner):
+    def _set_module_variables(self, runner):
         self._changed = True
         self._module_variables = runner.module_vars
 
-    def set_default_variables(self, runner):
+    def _set_default_variables(self, runner):
         self._changed = True
         self._default_variables = runner.default_vars
 
-    def set_environment(self, runner):
+    def _set_environment(self, runner):
         self._changed = True
         self._environment = runner.environment
 
-    def set_playbook_dir(self, runner):
+    def _set_playbook_dir(self, runner):
         self._changed = True
         self._playbook_dir = runner.basedir
 
@@ -115,7 +130,7 @@ class InventoryContext(object):
         self._inventory_file = inventory.src()
 
     def set_loop_item(self, value):
-        self._changed = True
+        self._inject['item'] = value
         self._item = value
 
     def get_loop_item(self):
@@ -175,8 +190,6 @@ class InventoryContext(object):
         inject['environment']  = self._environment
         inject['playbook_dir'] = self._playbook_dir
         inject['item']         = self._item
-
-        print "INJECT=%s" % inject
 
         self._inject = inject
         return inject

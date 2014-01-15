@@ -102,18 +102,10 @@ class TestInventoryLibrarian(unittest.TestCase):
         self.context = self.librarian.context()
 
     def basic_prep(self): 
-        self.context.set_default_variables(self.mock_runner)
         self.context.set_host_variables(HOST_VARIABLES)
-        self.context.set_module_variables(self.mock_runner)
         self.context.set_facts_for_host(HOST_FACTS)
-        self.context.set_remote_user(self.mock_runner)
         self.context.set_host_vars_proxy(self.mock_host_vars_proxy)
-        self.context.set_group_names(self.mock_inventory)
-        self.context.set_groups(self.mock_inventory)
-        self.context.set_environment(self.mock_runner)
-        self.context.set_playbook_dir(self.mock_runner)
-        self.context.set_inventory_dir(self.mock_inventory)
-        self.context.set_inventory_file(self.mock_inventory)
+        self.context.set_inventory(self.mock_inventory)
         self.context.set_loop_item(None)
         
     def test_basic_variable_blending(self):
