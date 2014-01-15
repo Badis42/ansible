@@ -141,7 +141,7 @@ class InventoryContext(object):
         ''' lookup a value from the librarian and then template the result using the host variables '''
 
         assert isinstance(field, basestring)
-        return self.template_manager.template(
+        return self._template_manager.template(
             self.get(field, *args),
             self
         )
@@ -149,7 +149,7 @@ class InventoryContext(object):
     def get_delegate_host(self):
         hostname = self.get('delegate_to')
         if hostname is not None:
-            hostname = self.template_manager.template(hostname, self)
+            hostname = self._template_manager.template(hostname, self)
             return self.inventory.get_host(hostname)
         return None
 
